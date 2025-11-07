@@ -1,0 +1,301 @@
+---
+# Seeds de comandos úteis
+# Para importar: criar script Python ou via API POST /commands/
+
+commands:
+  # ==================== DOCKER ====================
+  - name: "docker-exec-bash"
+    description: "Executa bash em container Docker"
+    command_template: "docker exec -it ${SERVICE} ${SHELL}"
+    category: "docker"
+    tags: ["docker", "exec", "shell", "bash"]
+    variables:
+      SERVICE:
+        type: "string"
+        required: true
+        description: "Nome do container (ex: postgres_postgres)"
+      SHELL:
+        type: "string"
+        required: false
+        default: "bash"
+        description: "Shell a usar (bash, sh, zsh)"
+    notes: "Use 'cmdgen services' para listar containers disponíveis"
+
+  - name: "docker-logs-tail"
+    description: "Exibe logs de container com follow"
+    command_template: "docker logs -f --tail=${LINES} ${SERVICE}"
+    category: "docker"
+    tags: ["docker", "logs", "debug"]
+    variables:
+      SERVICE:
+        type: "string"
+        required: true
+        description: "Nome do container"
+      LINES:
+        type: "integer"
+        required: false
+        default: "100"
+        description: "Número de linhas a exibir"
+
+  - name: "docker-stats"
+    description: "Mostra estatísticas de uso de containers"
+    command_template: "docker stats ${SERVICE}"
+    category: "docker"
+    tags: ["docker", "monitoring", "stats"]
+    variables:
+      SERVICE:
+        type: "string"
+        required: false
+        default: ""
+        description: "Container específico (vazio = todos)"
+
+  - name: "docker-prune"
+    description: "Remove recursos Docker não utilizados"
+    command_template: "docker system prune -af --volumes"
+    category: "docker"
+    tags: ["docker", "cleanup", "maintenance"]
+    variables: {}
+    notes: "ATENÇÃO: Remove volumes não utilizados! Use com cuidado."
+
+  # ==================== POSTGRES ====================
+  - name: "psql-connect"
+    description: "Conecta ao PostgreSQL via psql"
+    command_template: "docker exec -it ${SERVICE} psql -U ${USER} -d ${DATABASE}"
+    category: "postgres"
+    tags: ["postgres", "psql", "database"]
+    variables:
+      SERVICE:
+        type: "string"
+        required: true
+        description: "Container do Postgres"
+      USER:
+        type: "string"
+        required: false
+        default: "postgres"
+        description: "Usuário do banco"
+      DATABASE:
+        type: "string"
+        required: false
+        default: "postgres"
+        description: "Nome do banco de dados"
+
+  - name: "psql-list-databases"
+    description: "Lista todos os bancos de dados"
+    command_template: "docker exec -it ${SERVICE} psql -U ${USER} -c '\\l'"
+    category: "postgres"
+    tags: ["postgres", "admin", "list"]
+    variables:
+      SERVICE:
+        type: "string"
+        required: true
+        description: "Container do Postgres"
+      USER:
+        type: "string"
+        required: false
+        default: "postgres"
+        description: "Usuário do banco"
+
+  - name: "psql-list-tables"
+    description: "Lista tabelas de um banco"
+    command_template: "docker exec -it ${SERVICE} psql -U ${USER} -d ${DATABASE} -c '\\dt'"
+    category: "postgres"
+    tags: ["postgres", "tables", "schema"]
+    variables:
+      SERVICE:
+        type: "string"
+        required: true
+        description: "Container do Postgres"
+      USER:
+        type: "string"
+        required: false
+        default: "postgres"
+        description: "Usuário do banco"
+      DATABASE:
+        type: "string"
+        required: true
+        description: "Nome do banco"
+
+  - name: "psql-backup"
+    description: "Backup de banco PostgreSQL"
+    command_template: "docker exec ${SERVICE} pg_dump -U ${USER} -d ${DATABASE} > backup_${DATABASE}_$(date +%Y%m%d).sql"
+    category: "postgres"
+    tags: ["postgres", "backup", "admin"]
+    variables:
+      SERVICE:
+        type: "string"
+        required: true
+        description: "Container do Postgres"
+      USER:
+        type: "string"
+        required: false
+        default: "postgres"
+        description: "Usuário do banco"
+      DATABASE:
+        type: "string"
+        required: true
+        description: "Banco a fazer backup"
+
+  # ==================== GIT ====================
+  - name: "git-commit-push"
+    description: "Add, commit e push em uma linha"
+    command_template: "git add . && git commit -m \"${MESSAGE}\" && git push"
+    category: "git"
+    tags: ["git", "commit", "push"]
+    variables:
+      MESSAGE:
+        type: "string"
+        required: true
+        description: "Mensagem do commit"
+
+  - name: "git-undo-commit"
+    description: "Desfaz último commit mantendo alterações"
+    command_template: "git reset --soft HEAD~1"
+    category: "git"
+    tags: ["git", "undo", "reset"]
+    variables: {}
+
+  - name: "git-new-branch"
+    description: "Cria e faz checkout de nova branch"
+    command_template: "git checkout -b ${BRANCH}"
+    category: "git"
+    tags: ["git", "branch", "workflow"]
+    variables:
+      BRANCH:
+        type: "string"
+        required: true
+        description: "Nome da nova branch"
+
+  # ==================== KUBERNETES ====================
+  - name: "kubectl-pods"
+    description: "Lista pods em um namespace"
+    command_template: "kubectl get pods -n ${NAMESPACE}"
+    category: "k8s"
+    tags: ["kubernetes", "kubectl", "pods"]
+    variables:
+      NAMESPACE:
+        type: "string"
+        required: false
+        default: "default"
+        description: "Namespace do Kubernetes"
+
+  - name: "kubectl-logs"
+    description: "Exibe logs de um pod"
+    command_template: "kubectl logs -f ${POD} -n ${NAMESPACE}"
+    category: "k8s"
+    tags: ["kubernetes", "logs", "debug"]
+    variables:
+      POD:
+        type: "string"
+        required: true
+        description: "Nome do pod"
+      NAMESPACE:
+        type: "string"
+        required: false
+        default: "default"
+        description: "Namespace"
+
+  - name: "kubectl-exec"
+    description: "Executa comando em pod"
+    command_template: "kubectl exec -it ${POD} -n ${NAMESPACE} -- ${COMMAND}"
+    category: "k8s"
+    tags: ["kubernetes", "exec", "shell"]
+    variables:
+      POD:
+        type: "string"
+        required: true
+        description: "Nome do pod"
+      NAMESPACE:
+        type: "string"
+        required: false
+        default: "default"
+        description: "Namespace"
+      COMMAND:
+        type: "string"
+        required: false
+        default: "/bin/bash"
+        description: "Comando a executar"
+
+  # ==================== SWARM ====================
+  - name: "swarm-services"
+    description: "Lista serviços do Docker Swarm"
+    command_template: "docker service ls"
+    category: "swarm"
+    tags: ["docker", "swarm", "services"]
+    variables: {}
+
+  - name: "swarm-service-logs"
+    description: "Logs de um serviço Swarm"
+    command_template: "docker service logs -f --tail=${LINES} ${SERVICE}"
+    category: "swarm"
+    tags: ["docker", "swarm", "logs"]
+    variables:
+      SERVICE:
+        type: "string"
+        required: true
+        description: "Nome do serviço (ex: cmdgen_api)"
+      LINES:
+        type: "integer"
+        required: false
+        default: "100"
+        description: "Número de linhas"
+
+  - name: "swarm-service-scale"
+    description: "Escala serviço Swarm"
+    command_template: "docker service scale ${SERVICE}=${REPLICAS}"
+    category: "swarm"
+    tags: ["docker", "swarm", "scale"]
+    variables:
+      SERVICE:
+        type: "string"
+        required: true
+        description: "Nome do serviço"
+      REPLICAS:
+        type: "integer"
+        required: true
+        description: "Número de réplicas"
+
+  - name: "swarm-stack-deploy"
+    description: "Deploy de stack no Swarm"
+    command_template: "docker stack deploy -c ${STACK_FILE} ${STACK_NAME}"
+    category: "swarm"
+    tags: ["docker", "swarm", "deploy", "stack"]
+    variables:
+      STACK_FILE:
+        type: "string"
+        required: false
+        default: "stack.yml"
+        description: "Arquivo de stack"
+      STACK_NAME:
+        type: "string"
+        required: true
+        description: "Nome da stack"
+
+  # ==================== SYSTEM ====================
+  - name: "disk-usage"
+    description: "Mostra uso de disco"
+    command_template: "df -h | grep -E '(Filesystem|${MOUNT})'"
+    category: "system"
+    tags: ["linux", "disk", "monitoring"]
+    variables:
+      MOUNT:
+        type: "string"
+        required: false
+        default: "/$"
+        description: "Mount point (regex)"
+
+  - name: "find-large-files"
+    description: "Encontra arquivos grandes"
+    command_template: "find ${PATH} -type f -size +${SIZE}M -exec ls -lh {} \\; 2>/dev/null"
+    category: "system"
+    tags: ["linux", "find", "disk"]
+    variables:
+      PATH:
+        type: "string"
+        required: false
+        default: "."
+        description: "Diretório para buscar"
+      SIZE:
+        type: "integer"
+        required: false
+        default: "100"
+        description: "Tamanho mínimo em MB"

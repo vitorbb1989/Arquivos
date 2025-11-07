@@ -1,0 +1,63 @@
+# Docker Compose para desenvolvimento local
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: cmdgen_postgres_dev
+    environment:
+      POSTGRES_DB: cmdgen
+      POSTGRES_USER: cmdgen
+      POSTGRES_PASSWORD: cmdgen
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cmdgen -d cmdgen"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.12
+    container_name: cmdgen_meili_dev
+    environment:
+      MEILI_ENV: development
+      MEILI_MASTER_KEY: dev_master_key_123
+    ports:
+      - "7700:7700"
+    volumes:
+      - meili-data:/meili_data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:7700/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cmdgen_api_dev
+    environment:
+      DATABASE_URL: postgresql+psycopg2://cmdgen:cmdgen@postgres:5432/cmdgen
+      MEILI_URL: http://meilisearch:7700
+      MEILI_MASTER_KEY: dev_master_key_123
+      LOG_LEVEL: debug
+    ports:
+      - "8000:8000"
+    volumes:
+      # Hot reload para desenvolvimento
+      - ./api:/app/api
+      - ./alembic:/app/alembic
+    depends_on:
+      postgres:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+    command: uvicorn api.app:app --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  postgres-data:
+  meili-data:

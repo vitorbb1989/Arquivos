@@ -1,0 +1,4 @@
+# CLI dependencies
+typer[all]==0.15.1
+httpx==0.28.1
+rich==13.9.4

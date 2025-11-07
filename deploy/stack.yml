@@ -1,0 +1,175 @@
+version: "3.9"
+
+# ==================== NETWORKS ====================
+networks:
+  minha_rede:
+    external: true
+
+# ==================== VOLUMES ====================
+volumes:
+  cmdgen-db:
+    driver: local
+  meili-data:
+    driver: local
+
+# ==================== SERVICES ====================
+services:
+  # ==================== POSTGRES ====================
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: cmdgen
+      POSTGRES_USER: cmdgen
+      POSTGRES_PASSWORD: ${DB_PASS}
+    volumes:
+      - cmdgen-db:/var/lib/postgresql/data
+    networks:
+      - minha_rede
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cmdgen -d cmdgen"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+
+  # ==================== MEILISEARCH ====================
+  meili:
+    image: getmeili/meilisearch:v1.12
+    environment:
+      MEILI_ENV: production
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
+      MEILI_HTTP_ADDR: 0.0.0.0:7700
+      MEILI_DB_PATH: /meili_data
+      MEILI_MAX_INDEXING_MEMORY: 512MB
+    volumes:
+      - meili-data:/meili_data
+    networks:
+      - minha_rede
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 768M
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:7700/health"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  # ==================== API ====================
+  api:
+    # Substitua pela sua imagem buildada
+    # Ex: ghcr.io/suaorg/cmdgen-api:latest
+    image: cmdgen-api:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg2://cmdgen:${DB_PASS}@postgres:5432/cmdgen
+      MEILI_URL: http://meili:7700
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      API_TITLE: "Gerador de Comandos API"
+      API_VERSION: "1.0.0"
+    networks:
+      - minha_rede
+    deploy:
+      replicas: 2
+      placement:
+        constraints:
+          - node.role == manager
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+      labels:
+        # Traefik
+        - "traefik.enable=true"
+        - "traefik.docker.network=minha_rede"
+
+        # HTTP Router
+        - "traefik.http.routers.cmdgen-api.rule=Host(`${DOMAIN}`)"
+        - "traefik.http.routers.cmdgen-api.entrypoints=websecure"
+        - "traefik.http.routers.cmdgen-api.tls=true"
+        - "traefik.http.routers.cmdgen-api.tls.certresolver=letsencrypt"
+
+        # Service
+        - "traefik.http.services.cmdgen-api.loadbalancer.server.port=8000"
+        - "traefik.http.services.cmdgen-api.loadbalancer.healthcheck.path=/healthz"
+        - "traefik.http.services.cmdgen-api.loadbalancer.healthcheck.interval=15s"
+
+        # Middleware (opcional - rate limiting, compress, etc)
+        - "traefik.http.routers.cmdgen-api.middlewares=compress"
+        - "traefik.http.middlewares.compress.compress=true"
+
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      - postgres
+      - meili
+
+  # ==================== CLI (opcional - para jobs) ====================
+  cli:
+    # Substitua pela sua imagem buildada
+    # Ex: ghcr.io/suaorg/cmdgen-cli:latest
+    image: cmdgen-cli:latest
+    build:
+      context: ../cli
+      dockerfile: Dockerfile
+    environment:
+      CMDGEN_API_URL: http://api:8000
+    networks:
+      - minha_rede
+    deploy:
+      replicas: 0  # Apenas para jobs manuais
+      restart_policy:
+        condition: none
+    entrypoint: ["python", "/app/cmdgen.py"]
+    command: ["--help"]
